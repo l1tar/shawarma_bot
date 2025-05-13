@@ -74,8 +74,8 @@ async def cmd_order(message: types.Message):
     # Creating a single message for all selections
     await message.reply(
         "Выберите шаурму:\n" + "\n".join(tmenu.keys()) +
-        "\n\nВыберите добавки (или 'Далее'):\n" + "\n".join(addons.keys()) + ['Далее'] +
-        "\n\nВыберите напиток (или 'Далее'):\n" + "\n".join(drinks.keys()) + ['Далее'],
+        "\n\nВыберите добавки (или 'Далее'):\n" + "\n".join(addons.keys()) + "\nДалее" +
+        "\n\nВыберите напиток (или 'Далее'):\n" + "\n".join(drinks.keys()) + "\nДалее",
         reply_markup=get_keyboard(list(tmenu.keys()) + list(addons.keys()) + list(drinks.keys()) + ['Далее'])
     )
 
