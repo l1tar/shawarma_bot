@@ -3,7 +3,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils import executor
 
-API_TOKEN = os.getenv("API_TOKEN")  # Добавь переменную в Render
+API_TOKEN = "7739157518:AAHthUbed4gd3diUvHi2Fp1lGVlSlfVcOSQ")  # Добавь переменную в Render
 if not API_TOKEN:
     raise ValueError("API_TOKEN не был найден в переменных окружения!")  # Проверка на наличие токена
     
