@@ -2,6 +2,7 @@ import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils import executor
+import logging
 
 API_TOKEN = ("7739157518:AAHthUbed4gd3diUvHi2Fp1lGVlSlfVcOSQ")  # Добавь переменную в Render
 if not API_TOKEN:
@@ -13,6 +14,11 @@ dp = Dispatcher(bot)
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
     await message.reply("Привет, я твой шаурма-бот!")
+  
+if __name__ == '__main__':
+    # По умолчанию Render присваивает переменную окружения PORT, которую нужно использовать
+    port = int(os.environ.get('PORT', 8080))
+    executor.start_polling(dp, skip_updates=True, on_shutdown=lambda: logging.info(f"App stopped on port {port}"))
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
