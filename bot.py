@@ -3,6 +3,8 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils import executor
 import logging
+from flask import Flask, request
+import asyncio
 
 API_TOKEN = ("7739157518:AAHthUbed4gd3diUvHi2Fp1lGVlSlfVcOSQ")  # Добавь переменную в Render
 if not API_TOKEN:
@@ -14,6 +16,26 @@ dp = Dispatcher(bot)
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
     await message.reply("Привет, я твой шаурма-бот!")
+  
+app = Flask(__name__)
+  
+# Устанавливаем webhook
+@app.route('/webhook', methods=['POST'])
+async def webhook():
+    json_str = request.get_data(as_text=True)
+    update = types.Update.to_object(json.loads(json_str))
+    await dp.process_update(update)
+    return 'OK'
+
+# Запуск Flask сервера
+if __name__ == '__main__':
+    # Устанавливаем Webhook для Telegram
+    webhook_url = os.getenv('WEBHOOK_URL')  # твой URL на сервере Render
+    bot.set_webhook(webhook_url)
+
+    # Запуск Flask в асинхронном режиме
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(app.run_async(host='0.0.0.0', port=8080))
   
 if __name__ == '__main__':
     # По умолчанию Render присваивает переменную окружения PORT, которую нужно использовать
@@ -129,3 +151,12 @@ async def reset_cmd(message: types.Message):
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
+import requests
+
+API_TOKEN = "7739157518:AAHthUbed4gd3diUvHi2Fp1lGVlSlfVcOSQ"  # Твой токен, который ты получишь у BotFather
+WEBHOOK_URL = "https://shawarma-bot-cb27.onrender.com"  # URL, который будет у тебя на Render (получишь его при деплое)
+
+url = f"https://api.telegram.org/bot{API_TOKEN}/setWebhook?url={WEBHOOK_URL}"
+
+response = requests.get(url)
+print(response.json())  # Чтобы увидеть успешную настройку
