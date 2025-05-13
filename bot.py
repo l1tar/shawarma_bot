@@ -5,6 +5,8 @@ from aiogram.utils import executor
 import logging
 from flask import Flask, request
 import asyncio
+import requests
+
 
 API_TOKEN = ("7739157518:AAHthUbed4gd3diUvHi2Fp1lGVlSlfVcOSQ")  # Добавь переменную в Render
 if not API_TOKEN:
@@ -18,24 +20,27 @@ async def send_welcome(message: types.Message):
     await message.reply("Привет, я твой шаурма-бот!")
   
 app = Flask(__name__)
-  
-# Устанавливаем webhook
+
+  # Устанавливаем webhook
 @app.route('/webhook', methods=['POST'])
-async def webhook():
+def webhook():
     json_str = request.get_data(as_text=True)
     update = types.Update.to_object(json.loads(json_str))
-    await dp.process_update(update)
+    dp.loop.create_task(dp.process_update(update))  # Используем create_task для асинхронного вызова
     return 'OK'
 
-# Запуск Flask сервера
-if __name__ == '__main__':
-    # Устанавливаем Webhook для Telegram
-    webhook_url = os.getenv('WEBHOOK_URL')  # твой URL на сервере Render
-    bot.set_webhook(webhook_url)
+# Устанавливаем Webhook для Telegram
+WEBHOOK_URL = "https://shawarma-bot-cb27.onrender.com"  # Здесь укажи URL своего Render приложения
+set_webhook_url = f"https://api.telegram.org/bot{API_TOKEN}/setWebhook?url={WEBHOOK_URL}"
 
-    # Запуск Flask в асинхронном режиме
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(app.run_async(host='0.0.0.0', port=8080))
+# Отправляем запрос на установку webhook
+response = requests.get(set_webhook_url)
+print(response.json())  # Проверка, установился ли Webhook
+
+if __name__ == '__main__':
+    # Запуск Flask с gunicorn
+    app.run(host='0.0.0.0', port=8080)
+
   
 if __name__ == '__main__':
     # По умолчанию Render присваивает переменную окружения PORT, которую нужно использовать
