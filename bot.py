@@ -4,10 +4,19 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils import executor
 
 API_TOKEN = os.getenv("API_TOKEN")  # Добавь переменную в Render
-
+if not API_TOKEN:
+    raise ValueError("API_TOKEN не был найден в переменных окружения!")  # Проверка на наличие токена
+    
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
+@dp.message_handler(commands=['start'])
+async def send_welcome(message: types.Message):
+    await message.reply("Привет, я твой шаурма-бот!")
+
+if __name__ == '__main__':
+    executor.start_polling(dp, skip_updates=True)
+    
 menu = {
     "Шаурма куриная": 200,
     "Шаурма говяжья": 250,
