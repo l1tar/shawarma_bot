@@ -1,167 +1,145 @@
 import os
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-from aiogram.utils import executor
 import logging
-from flask import Flask, request
-import asyncio
-import requests
+from aiogram import Bot, Dispatcher, types
+from aiogram.utils.executor import start_webhook
 
+# Configuration
+API_TOKEN = ('7739157518:AAHthUbed4gd3diUvHi2Fp1lGVlSlfVcOSQ')  # Telegram Bot token from environment
+WEBHOOK_HOST = ('https://shawarma-bot-cb27.onrender.com')  # e.g. https://your-app-name.onrender.com
+WEBHOOK_PATH = '/webhook'
+WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
+WEBAPP_HOST = '0.0.0.0'
+WEBAPP_PORT = int(os.getenv('PORT', 8080))
 
-API_TOKEN = ("7739157518:AAHthUbed4gd3diUvHi2Fp1lGVlSlfVcOSQ")  # Добавь переменную в Render
-if not API_TOKEN:
-    raise ValueError("API_TOKEN не был найден в переменных окружения!")  # Проверка на наличие токена
-    
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+
+# Initialize bot and dispatcher
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-@dp.message_handler(commands=['start'])
-async def send_welcome(message: types.Message):
-    await message.reply("Привет, я твой шаурма-бот!")
-  
-app = Flask(__name__)
-
-  # Устанавливаем webhook
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    json_str = request.get_data(as_text=True)
-    update = types.Update.to_object(json.loads(json_str))
-    dp.loop.create_task(dp.process_update(update))  # Используем create_task для асинхронного вызова
-    return 'OK'
-
-# Устанавливаем Webhook для Telegram
-WEBHOOK_URL = "https://shawarma-bot-cb27.onrender.com"  # Здесь укажи URL своего Render приложения
-set_webhook_url = f"https://api.telegram.org/bot{API_TOKEN}/setWebhook?url={WEBHOOK_URL}"
-
-# Отправляем запрос на установку webhook
-response = requests.get(set_webhook_url)
-print(response.json())  # Проверка, установился ли Webhook
-
-if __name__ == '__main__':
-    # Запуск Flask с gunicorn
-    app.run(host='0.0.0.0', port=8080)
-
-  
-if __name__ == '__main__':
-    # По умолчанию Render присваивает переменную окружения PORT, которую нужно использовать
-    port = int(os.environ.get('PORT', 8080))
-    executor.start_polling(dp, skip_updates=True, on_shutdown=lambda: logging.info(f"App stopped on port {port}"))
-
-if __name__ == '__main__':
-    executor.start_polling(dp, skip_updates=True)
-    
-menu = {
-    "Шаурма куриная": 200,
-    "Шаурма говяжья": 250,
-    "Фалафель": 180
+# Menu data
+tmenu = {
+    'Куриная шаурма': 200,
+    'Говяжья шаурма': 250,
+    'Вегетарианская': 180
 }
-
-add_ons = {
-    "Сыр": 30,
-    "Острый соус": 20,
-    "Халапеньо": 25
+addons = {
+    'Сыр': 30,
+    'Острый соус': 20,
+    'Халапеньо': 25
 }
-
 drinks = {
-    "Кола": 50,
-    "Спрайт": 50,
-    "Вода": 30
+    'Кола': 50,
+    'Фанта': 50,
+    'Вода': 30
 }
 
+# Orders storage
 orders = {}
-current_leader = None
+order_initiator = None
 
+# Utility to build reply keyboards
 def get_keyboard(options):
-    return ReplyKeyboardMarkup(resize_keyboard=True).add(*[KeyboardButton(opt) for opt in options])
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    for opt in options:
+        keyboard.add(types.KeyboardButton(opt))
+    return keyboard
 
+# Handlers
 @dp.message_handler(commands=['start'])
-async def start_cmd(message: types.Message):
-    await message.reply("Привет! Чтобы начать сбор заказа, напиши /начатьзаказ")
+async def cmd_start(message: types.Message):
+    await message.reply(
+        "Привет! Я бот для заказа шаурмы. \n"  
+        "Чтобы начать сбор заказов, отправь /start_order"
+    )
 
-@dp.message_handler(commands=['начатьзаказ'])
-async def start_order(message: types.Message):
-    global current_leader, orders
-    if current_leader:
-        await message.reply(f"Сбор заказа уже начат пользователем {current_leader}.")
-    else:
-        current_leader = message.from_user.id
-        orders = {}
-        await message.reply("Сбор заказа начат! Используйте /заказать, чтобы добавить свой заказ.")
-
-@dp.message_handler(commands=['заказать'])
-async def order_cmd(message: types.Message):
-    if not current_leader:
-        await message.reply("Сбор заказа ещё не начат. Напиши /начатьзаказ.")
+@dp.message_handler(commands=['start_order'])
+async def cmd_start_order(message: types.Message):
+    global order_initiator, orders
+    if order_initiator:
+        await message.reply(f"Сбор заказа уже начат пользователем.")
         return
+    order_initiator = message.from_user.id
+    orders = {}
+    await message.reply("Сбор заказа начат! Каждый может добавить свой заказ командой /order.")
 
-    kb = get_keyboard(list(menu.keys()))
-    await message.reply("Выбери основное блюдо:", reply_markup=kb)
-
-@dp.message_handler(lambda msg: msg.text in menu)
-async def handle_main(msg: types.Message):
-    user_id = msg.from_user.id
-    orders.setdefault(user_id, {"name": msg.from_user.full_name, "items": [], "total": 0})
-    orders[user_id]["items"].append(msg.text)
-    orders[user_id]["total"] += menu[msg.text]
-
-    kb = get_keyboard(list(add_ons.keys()) + ["Без добавок", "Готово"])
-    await msg.reply("Добавки?", reply_markup=kb)
-
-@dp.message_handler(lambda msg: msg.text in add_ons or msg.text == "Без добавок")
-async def handle_addons(msg: types.Message):
-    user_id = msg.from_user.id
-    if msg.text in add_ons:
-        orders[user_id]["items"].append(f"Добавка: {msg.text}")
-        orders[user_id]["total"] += add_ons[msg.text]
-        await msg.reply("Ещё добавка или нажми 'Готово'")
-    else:
-        kb = get_keyboard(list(drinks.keys()) + ["Без напитка", "Завершить"])
-        await msg.reply("Напитки?", reply_markup=kb)
-
-@dp.message_handler(lambda msg: msg.text in drinks or msg.text == "Без напитка")
-async def handle_drinks(msg: types.Message):
-    user_id = msg.from_user.id
-    if msg.text in drinks:
-        orders[user_id]["items"].append(f"Напиток: {msg.text}")
-        orders[user_id]["total"] += drinks[msg.text]
-    await msg.reply("Готово! Если хочешь изменить заказ, напиши /заказать.")
-
-@dp.message_handler(commands=['итог'])
-async def summary_cmd(message: types.Message):
-    if message.from_user.id != current_leader:
-        await message.reply("Только инициатор заказа может видеть итог.")
+@dp.message_handler(commands=['order'])
+async def cmd_order(message: types.Message):
+    if not order_initiator:
+        await message.reply("Сначала начни сбор заказа: /start_order")
         return
+    await message.reply("Выберите шаурму:", reply_markup=get_keyboard(list(tmenu.keys())))
 
-    result = "Итоговый заказ:\n\n"
+@dp.message_handler(lambda m: m.text in tmenu.keys())
+async def process_main(m: types.Message):
+    uid = m.from_user.id
+    orders.setdefault(uid, {'items': [], 'total': 0})
+    orders[uid]['items'].append(m.text)
+    orders[uid]['total'] += tmenu[m.text]
+    await m.reply("Выберите добавки или 'Без добавок':", reply_markup=get_keyboard(list(addons.keys()) + ['Без добавок']))
+
+@dp.message_handler(lambda m: m.text in addons.keys() or m.text == 'Без добавок')
+async def process_addons(m: types.Message):
+    uid = m.from_user.id
+    if m.text in addons:
+        orders[uid]['items'].append(f"Добавка: {m.text}")
+        orders[uid]['total'] += addons[m.text]
+        return
+    await m.reply("Выберите напиток или 'Без напитка':", reply_markup=get_keyboard(list(drinks.keys()) + ['Без напитка']))
+
+@dp.message_handler(lambda m: m.text in drinks.keys() or m.text == 'Без напитка')
+async def process_drinks(m: types.Message):
+    uid = m.from_user.id
+    if m.text in drinks:
+        orders[uid]['items'].append(f"Напиток: {m.text}")
+        orders[uid]['total'] += drinks[m.text]
+    await m.reply("Заказ зарегистрирован. Для просмотра своего заказа — /my_order.")
+
+@dp.message_handler(commands=['my_order'])
+async def cmd_my_order(m: types.Message):
+    uid = m.from_user.id
+    order = orders.get(uid)
+    if not order:
+        await m.reply("У вас нет заказа.")
+        return
+    text = "Ваш заказ:\n"
+    for item in order['items']:
+        text += f"- {item}\n"
+    text += f"Итого: {order['total']}₽"
+    await m.reply(text)
+
+@dp.message_handler(commands=['final_order'])
+async def cmd_final(m: types.Message):
+    if m.from_user.id != order_initiator:
+        return
+    text = "Итоговый заказ:\n"
     total_sum = 0
-    for data in orders.values():
-        result += f"{data['name']}:\n"
-        for item in data["items"]:
-            result += f" - {item}\n"
-        result += f"Итого: {data['total']} руб\n\n"
-        total_sum += data["total"]
+    for uid, o in orders.items():
+        user = (await bot.get_chat(uid)).full_name
+        items = '\n'.join(o['items'])
+        text += f"{user}:\n{items}\nСумма: {o['total']}₽\n\n"
+        total_sum += o['total']
+    text += f"Общая сумма: {total_sum}₽"
+    await m.reply(text)
 
-    result += f"Общая сумма: {total_sum} руб"
-    await message.reply(result)
+# Startup and shutdown callbacks
+async def on_startup(dp):
+    logging.info('Setting webhook...')
+    await bot.set_webhook(WEBHOOK_URL)
 
-@dp.message_handler(commands=['сброс'])
-async def reset_cmd(message: types.Message):
-    global current_leader, orders
-    if message.from_user.id == current_leader:
-        current_leader = None
-        orders = {}
-        await message.reply("Сбор заказа сброшен.")
-    else:
-        await message.reply("Только лидер заказа может сбросить его.")
+async def on_shutdown(dp):
+    logging.info('Removing webhook...')
+    await bot.delete_webhook()
 
 if __name__ == '__main__':
-    executor.start_polling(dp, skip_updates=True)
-import requests
-
-API_TOKEN = "7739157518:AAHthUbed4gd3diUvHi2Fp1lGVlSlfVcOSQ"  # Твой токен, который ты получишь у BotFather
-WEBHOOK_URL = "https://shawarma-bot-cb27.onrender.com"  # URL, который будет у тебя на Render (получишь его при деплое)
-
-url = f"https://api.telegram.org/bot{API_TOKEN}/setWebhook?url={WEBHOOK_URL}"
-
-response = requests.get(url)
-print(response.json())  # Чтобы увидеть успешную настройку
+    start_webhook(
+        dispatcher=dp,
+        webhook_path=WEBHOOK_PATH,
+        on_startup=on_startup,
+        on_shutdown=on_shutdown,
+        skip_updates=True,
+        host=WEBAPP_HOST,
+        port=WEBAPP_PORT,
+    )
+```
